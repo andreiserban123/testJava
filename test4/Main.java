@@ -1,92 +1,76 @@
 import java.io.*;
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Main {
     public static void main(String[] args) {
-        List<Proiect> lista;
-        Map<String, List<String>> acronymsByDepartment;
-
+        List<Proiect> proiecte = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader("proiecte.csv"))) {
-            lista = br.lines().skip(1)
-                    .map(Main::parseLine)
-                    .toList();
-
-            acronymsByDepartment = lista.stream().collect(
-                    Collectors.groupingBy(
-                            Proiect::getDepartament,
-                            Collectors.mapping(Proiect::getAcronim, Collectors.toList())
-                    )
-            );
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-            return;
-        }
-
-        acronymsByDepartment.forEach((k, v) -> {
-            System.out.println(k);
-            v.forEach(System.out::println);
-        });
-
-        double totalBudget = lista.stream().mapToDouble(Proiect::getBuget).sum();
-        System.out.println("Bugetul Total: " + totalBudget);
-
-
-        List<Proiect> listSort = lista.stream().filter(proiect -> proiect.getBuget() > 0)
-                .sorted((p1, p2) -> Double.compare(p2.getNrMembrii(), p1.getNrMembrii())
-                ).toList();
-        System.out.println("Sorted List: ");
-        listSort.forEach(System.out::println);
-
-        // Save into a new CSV file
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter("valoare_proiecte.csv"))) {
-            for (Proiect p : listSort) {
-                bw.write(p.getCodProiect() + "," + p.getAcronim() + "," + p.getSefProiect() + "," + p.getDepartament() + ","
-                        + p.getBuget() + "," + p.getNrMembrii());
-                bw.write(System.lineSeparator());
+            String line = br.readLine();
+            while (line != null) {
+                String[] elements = line.split(",");
+                Proiect p = new Proiect();
+                p.setCodProiect(Integer.parseInt(elements[0]));
+                p.setAcronim(elements[1]);
+                p.setSefProiect(elements[2]);
+                p.setDepartament(elements[3]);
+                p.setBuget(Double.parseDouble(elements[4]));
+                p.setNrMembrii(Integer.parseInt(elements[5]));
+                proiecte.add(p);
+                line = br.readLine();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
-        // Save into a binary file
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream("proiecte.dat"));
-             ObjectOutputStream oos = new ObjectOutputStream(dos)
-        ) {
-            oos.writeObject(listSort);
+        System.out.println("Proiecte:");
+        proiecte.forEach(System.out::println);
+        var cerinta = proiecte.stream().collect(Collectors.groupingBy(Proiect::getDepartament));
+        cerinta.forEach((k, v) -> {
+            System.out.println(k + ":");
+            v.forEach(System.out::println);
+        });
+        var proiecteSortate = proiecte.stream().sorted((p1, p2) -> Double.compare(p2.getBuget(), p1.getBuget()))
+                .toList();
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("valoare_proiecte.csv"))) {
+            for (Proiect p : proiecteSortate) {
+                bw.write(p.getCodProiect() + ",");
+                bw.write(p.getAcronim() + ",");
+                bw.write(p.getBuget() + ",");
+                bw.write("" + p.getNrMembrii());
+                bw.write(System.lineSeparator());
+            }
         } catch (IOException e) {
             System.err.println(e.getMessage());
         }
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("proiecte.dat"))) {
+            oos.writeObject(proiecte);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("proiecte.dat"))) {
+            var lista = (List<Proiect>) ois.readObject();
+            System.out.println("Lista din binar:");
+            lista.forEach(System.out::println);
+            Map<Integer, ?> map = lista.stream().collect(Collectors.toMap(
+                    Proiect::getCodProiect,
+                    proiect ->
+                            new Object() {
+                                String acronimul = proiect.getAcronim();
+                                double buget = proiect.getBuget();
 
-        // Read from binary file and print map
-        try (DataInputStream dis = new DataInputStream(new FileInputStream("proiecte.dat"));
-             ObjectInputStream ois = new ObjectInputStream(dis)
-        ) {
-            List<Proiect> fromBin = (List<Proiect>) ois.readObject();
-            System.out.println("From bin");
-            Map<Integer, Map<String, Double>> map = new HashMap<>();
-            for (Proiect p : fromBin) {
-                System.out.println(p);
-                map.computeIfAbsent(p.getCodProiect(), k -> new HashMap<>()).put(p.getAcronim(), p.getBuget());
-            }
-
-            // Print map
-            map.forEach((key, value) -> {
-                System.out.println("Cod Proiect: " + key);
-                value.forEach((acronim, budget) -> {
-                    System.out.println("Acronim: " + acronim + ", Budget: " + budget);
-                });
+                                @Override
+                                public String toString() {
+                                    return acronimul + "," + buget;
+                                }
+                            }
+            ));
+            map.forEach((k, v) -> {
+                System.out.println(k + ":" + v);
             });
         } catch (IOException | ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private static Proiect parseLine(String line) {
-        String[] split = line.split(",");
-        return new Proiect(Integer.parseInt(split[0]), split[1], split[2], split[3],
-                Double.parseDouble(split[4]), Integer.parseInt(split[5]));
     }
 }
